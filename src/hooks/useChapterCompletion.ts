@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { minReadTimeMs, countWords, BibleVerse } from "@/lib/quiz-generator";
+import { useEffect, useRef, useState } from "react";
+import {
+  minReadTimeMs,
+  countWords,
+  scrollThresholdPercent,
+  BibleVerse,
+} from "@/lib/quiz-generator";
 
 interface UseChapterCompletionOptions {
   verses: BibleVerse[];
@@ -16,23 +21,37 @@ interface CompletionState {
   isComplete: boolean;
   wordsTotal: number;
   secondsRemaining: number;
+  encouragement: string;
 }
+
+const ENCOURAGEMENTS = [
+  "Take your time — let the words sink in.",
+  "You're making progress!",
+  "Almost there — reflect on what you've read.",
+  "Great pace. Keep going!",
+];
 
 export function useChapterCompletion({
   verses,
   alreadyComplete,
   onComplete,
 }: UseChapterCompletionOptions): CompletionState {
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [timeProgress, setTimeProgress] = useState(0);
-  const [isComplete, setIsComplete] = useState(alreadyComplete);
+  const [scrollProgress, setScrollProgress] = useState(alreadyComplete ? 100 : 0);
+  const [timeProgress, setTimeProgress] = useState(alreadyComplete ? 100 : 0);
+  const [isCompleteLocal, setIsCompleteLocal] = useState(false);
+  const [encouragement, setEncouragement] = useState(ENCOURAGEMENTS[0]);
+  const [secondsRemaining, setSecondsRemaining] = useState(() =>
+    verses.length > 0 && !alreadyComplete ? Math.ceil(minReadTimeMs(verses) / 1000) : 0
+  );
   const startTime = useRef<number | null>(null);
   const maxScroll = useRef(0);
   const completedRef = useRef(alreadyComplete);
   const onCompleteRef = useRef(onComplete);
 
+  const isComplete = alreadyComplete || isCompleteLocal;
   const wordsTotal = countWords(verses);
   const minTime = minReadTimeMs(verses);
+  const scrollThreshold = scrollThresholdPercent();
 
   useEffect(() => {
     onCompleteRef.current = onComplete;
@@ -40,10 +59,7 @@ export function useChapterCompletion({
 
   useEffect(() => {
     if (alreadyComplete) {
-      setIsComplete(true);
       completedRef.current = true;
-      setScrollProgress(100);
-      setTimeProgress(100);
     }
   }, [alreadyComplete]);
 
@@ -59,6 +75,12 @@ export function useChapterCompletion({
       const pct = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 100;
       maxScroll.current = Math.max(maxScroll.current, pct);
       setScrollProgress(Math.round(maxScroll.current));
+
+      if (pct > 50 && pct < scrollThreshold) {
+        setEncouragement("Almost finished — read through to the end!");
+      } else if (pct >= scrollThreshold) {
+        setEncouragement("Nice! Just a moment more to reflect on what you read.");
+      }
     };
 
     const tick = () => {
@@ -66,37 +88,37 @@ export function useChapterCompletion({
       const elapsed = Date.now() - startTime.current;
       const timePct = Math.min(100, (elapsed / minTime) * 100);
       setTimeProgress(Math.round(timePct));
+      setSecondsRemaining(Math.max(0, Math.ceil((minTime - elapsed) / 1000)));
 
-      const scrollMet = maxScroll.current >= 88;
+      const scrollMet = maxScroll.current >= scrollThreshold;
       const timeMet = elapsed >= minTime;
 
       if (scrollMet && timeMet && !completedRef.current) {
         completedRef.current = true;
-        setIsComplete(true);
+        setIsCompleteLocal(true);
         setScrollProgress(100);
         setTimeProgress(100);
+        setSecondsRemaining(0);
+        setEncouragement("Ready! See how much you understood.");
         onCompleteRef.current();
       }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
-    const interval = setInterval(tick, 500);
+    const interval = setInterval(tick, 400);
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
       clearInterval(interval);
     };
-  }, [verses, minTime, alreadyComplete]);
-
-  const elapsed = startTime.current ? Date.now() - startTime.current : 0;
-  const secondsRemaining = Math.max(0, Math.ceil((minTime - elapsed) / 1000));
+  }, [verses, minTime, scrollThreshold, alreadyComplete]);
 
   const readProgress = isComplete
     ? 100
     : Math.round(
-        (Math.min(scrollProgress / 88, 1) * 0.55 + Math.min(timeProgress / 100, 1) * 0.45) *
-          100
+        Math.min(scrollProgress / scrollThreshold, 1) * 65 +
+          Math.min(timeProgress / 100, 1) * 35
       );
 
   return {
@@ -106,12 +128,6 @@ export function useChapterCompletion({
     isComplete,
     wordsTotal,
     secondsRemaining,
+    encouragement,
   };
-}
-
-export function useScrollToVerse() {
-  return useCallback((verseNum: number) => {
-    const el = document.getElementById(`verse-${verseNum}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, []);
 }

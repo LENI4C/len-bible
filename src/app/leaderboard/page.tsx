@@ -1,21 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useProgressStore, getLeaderboard, LeaderboardEntry } from "@/store/useProgressStore";
+import { useProgressStore, getLeaderboard } from "@/store/useProgressStore";
+import { useStoreReady } from "@/hooks/useStoreReady";
 import { AppLoading } from "@/components/AppLoading";
 import { Trophy, Flame, BookOpen, Brain, Medal, Users } from "lucide-react";
+import type { LeaderboardEntry } from "@/store/useProgressStore";
 
 export default function LeaderboardPage() {
   const profile = useProgressStore((s) => s.profile);
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const ready = useStoreReady();
+  const entries = ready ? getLeaderboard() : [];
 
-  useEffect(() => {
-    setEntries(getLeaderboard());
-    setLoaded(true);
-  }, []);
-
-  if (!loaded) return <AppLoading />;
+  if (!ready) return <AppLoading />;
 
   const userRank =
     profile

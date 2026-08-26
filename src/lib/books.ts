@@ -4,6 +4,8 @@ export interface BibleBook {
   shortName: string;
   chapters: number;
   testament: "OT" | "NT";
+  /** helloao.org API book id when it differs from our id */
+  helloaoId?: string;
 }
 
 export const BIBLE_BOOKS: Record<string, BibleBook> = {
@@ -35,7 +37,7 @@ export const BIBLE_BOOKS: Record<string, BibleBook> = {
   OBA: { id: "OBA", name: "Obadiah", shortName: "Obad", chapters: 1, testament: "OT" },
   JON: { id: "JON", name: "Jonah", shortName: "Jonah", chapters: 4, testament: "OT" },
   MIC: { id: "MIC", name: "Micah", shortName: "Mic", chapters: 7, testament: "OT" },
-  NAH: { id: "NAH", name: "Nahum", shortName: "Nah", chapters: 3, testament: "OT" },
+  NAH: { id: "NAH", name: "Nahum", shortName: "Nah", chapters: 3, testament: "OT", helloaoId: "NAM" },
   HAB: { id: "HAB", name: "Habakkuk", shortName: "Hab", chapters: 3, testament: "OT" },
   ZEP: { id: "ZEP", name: "Zephaniah", shortName: "Zeph", chapters: 3, testament: "OT" },
   EZK: { id: "EZK", name: "Ezekiel", shortName: "Ezek", chapters: 48, testament: "OT" },
@@ -77,6 +79,11 @@ export const BIBLE_BOOKS: Record<string, BibleBook> = {
 
 export function getBook(id: string): BibleBook | undefined {
   return BIBLE_BOOKS[id];
+}
+
+/** Book id used by helloao.org API (may differ from our internal id). */
+export function getHelloaoBookId(bookId: string): string {
+  return BIBLE_BOOKS[bookId]?.helloaoId ?? bookId;
 }
 
 export function chapterKey(bookId: string, chapter: number): string {

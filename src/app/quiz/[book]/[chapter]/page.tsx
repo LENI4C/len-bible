@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchQuiz, ChapterQuiz, PASS_THRESHOLD } from "@/lib/bible-api";
-import { getBook } from "@/lib/books";
+import { getBook, BibleBook } from "@/lib/books";
 import { useProgressStore } from "@/store/useProgressStore";
 import { getNextChapter } from "@/lib/chronological-order";
 import { AppLoading } from "@/components/AppLoading";
@@ -26,8 +26,33 @@ export default function QuizPage({
   const bookId = book.toUpperCase();
   const chapter = parseInt(chapterStr, 10);
   const bookData = getBook(bookId);
-  const { version, saveQuizResult } = useProgressStore();
+  const { version } = useProgressStore();
 
+  if (!bookData) return null;
+
+  return (
+    <QuizSession
+      key={`${version}-${bookId}-${chapter}`}
+      bookId={bookId}
+      chapter={chapter}
+      bookData={bookData}
+      version={version}
+    />
+  );
+}
+
+function QuizSession({
+  bookId,
+  chapter,
+  bookData,
+  version,
+}: {
+  bookId: string;
+  chapter: number;
+  bookData: BibleBook;
+  version: string;
+}) {
+  const { saveQuizResult } = useProgressStore();
   const [quiz, setQuiz] = useState<ChapterQuiz | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -44,22 +69,24 @@ export default function QuizPage({
   } | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError("");
+    let cancelled = false;
     fetchQuiz(version, bookId, chapter)
       .then((q) => {
+        if (cancelled) return;
         setQuiz(q);
         setAnswers(new Array(q.questions.length).fill(null));
-        setCurrentQ(0);
-        setSelected(null);
-        setShowResult(false);
-        setFinalScore(null);
       })
-      .catch((e) => setError(e.message ?? "Failed to load quiz"))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!cancelled) setError(e.message ?? "Failed to load quiz");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [version, bookId, chapter]);
 
-  if (!bookData) return null;
   if (loading) return <AppLoading />;
 
   if (error || !quiz) {
@@ -109,12 +136,14 @@ export default function QuizPage({
           {finalScore.passed ? (
             <>
               <Trophy className="mx-auto mb-4 h-16 w-16 text-primary" />
-              <h1 className="mb-2 text-3xl font-bold gradient-text">Quiz Passed!</h1>
+              <h1 className="mb-2 text-3xl font-bold gradient-text">You understood it!</h1>
+              <p className="mb-4 text-muted">Great — you grasped the key ideas from this chapter.</p>
             </>
           ) : (
             <>
               <XCircle className="mx-auto mb-4 h-16 w-16 text-danger" />
-              <h1 className="mb-2 text-3xl font-bold">Keep Learning</h1>
+              <h1 className="mb-2 text-3xl font-bold">Worth another look</h1>
+              <p className="mb-4 text-muted">No shame in re-reading — understanding beats speed.</p>
             </>
           )}
           <p className="mb-1 text-4xl font-bold">{finalScore.score}/{finalScore.total}</p>
@@ -153,24 +182,26 @@ export default function QuizPage({
 
       <div className="mb-6">
         <div className="mb-2 flex justify-between text-sm text-muted">
-          <span>{bookData.name} · Chapter {chapter} Quiz</span>
+          <span>{bookData.name} · Chapter {chapter} · Understanding check</span>
           <span>{currentQ + 1} of {quiz.questions.length}</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-border">
           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${((currentQ + 1) / quiz.questions.length) * 100}%` }} />
         </div>
-        <p className="mt-2 text-xs text-muted">Generated from the chapter text you read</p>
+        <p className="mt-2 text-xs text-muted">
+          These questions check what you understood — not memorizing verse numbers.
+        </p>
       </div>
 
       <AnimatePresence mode="wait">
         <motion.div key={currentQ} initial={{ x: 16, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -16, opacity: 0 }} className="glass-card rounded-2xl p-6">
-          <h2 className="mb-6 text-lg font-semibold leading-relaxed">{question.question}</h2>
+          <h2 className="mb-6 text-lg font-semibold leading-snug">{question.question}</h2>
           <div className="space-y-3">
             {question.options.map((option, i) => (
               <button
                 key={i}
                 onClick={() => setSelected(i)}
-                className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left ${
+                className={`quiz-option flex w-full items-center gap-3 rounded-xl border p-4 text-left ${
                   selected === i ? "border-primary bg-primary/10" : "border-border hover:bg-card-hover"
                 }`}
               >

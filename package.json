@@ -1,13 +1,25 @@
 {
   "name": "len-bible",
   "version": "0.1.0",
-  "private": true,
+  "description": "A gamified chronological Bible reading app — read, understand, and track your journey through Scripture.",
+  "license": "MIT",
+  "author": "Leni4c",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LENI4C/len-bible.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LENI4C/len-bible/issues"
+  },
+  "homepage": "https://len-bible.vercel.app",
   "scripts": {
-    "dev": "next dev",
-    "dev:clean": "rm -rf .next && next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:next": "next dev",
+    "dev:clean": "rm -rf .next && node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "framer-motion": "^12.23.12",

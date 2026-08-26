@@ -1,4 +1,4 @@
-import { BIBLE_BOOKS } from "@/lib/books";
+import { BIBLE_BOOKS, getHelloaoBookId } from "@/lib/books";
 import { getVersion } from "@/lib/bible-versions";
 
 type ContentPart =
@@ -116,7 +116,8 @@ export async function fetchBibleChapter(
     }
   }
 
-  const url = `https://bible.helloao.org/api/${helloaoId}/${bookData.id}/${chapterNum}.json`;
+  const apiBookId = getHelloaoBookId(bookData.id);
+  const url = `https://bible.helloao.org/api/${helloaoId}/${apiBookId}/${chapterNum}.json`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error("Chapter not found");

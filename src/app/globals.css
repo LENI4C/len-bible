@@ -85,15 +85,29 @@ body {
   100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
 }
 
+.prose-bible {
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  letter-spacing: 0.01em;
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
 .prose-bible p {
-  margin-bottom: 0.75rem;
-  line-height: 1.8;
+  margin-bottom: 0.875rem;
 }
 
 .prose-bible .verse-num {
   color: var(--primary);
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   vertical-align: super;
-  margin-right: 0.25rem;
+  margin-right: 0.35rem;
+  opacity: 0.9;
+}
+
+.quiz-option {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
 }

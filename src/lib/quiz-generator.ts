@@ -21,6 +21,32 @@ export interface ChapterQuiz {
 
 export const PASS_THRESHOLD = 0.7;
 
+const STOP_WORDS = new Set([
+  "The", "And", "But", "For", "Then", "Now", "So", "He", "She", "They", "It",
+  "His", "Her", "Their", "This", "That", "There", "When", "After", "Before",
+  "In", "At", "On", "As", "If", "All", "Who", "What", "How", "Why",
+]);
+
+const COMMON_NAMES = new Set([
+  "God", "Lord", "Jesus", "Christ", "Spirit", "Israel", "David", "Moses",
+  "Abraham", "Paul", "Peter", "John", "Mary", "Joseph", "Adam", "Eve",
+  "Noah", "Aaron", "Joshua", "Samuel", "Solomon", "Elijah", "Isaiah",
+  "Pharaoh", "Jacob", "Isaac", "Sarah", "Rachel", "Leah", "Aaron",
+]);
+
+const GENERIC_DISTRACTORS = [
+  "A census across the whole empire",
+  "A king builds a temple in Jerusalem",
+  "The people cross the Red Sea",
+  "Jesus feeds five thousand people",
+  "Paul writes to the church in Rome",
+  "David defeats Goliath",
+  "The walls of Jericho fall",
+  "Daniel survives a den of lions",
+  "Jonah is swallowed by a great fish",
+  "The Ten Commandments are given at Sinai",
+];
+
 function seededRandom(seed: string): () => number {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) {
@@ -44,26 +70,115 @@ function shuffleWithSeed<T>(items: T[], rand: () => number): T[] {
   return arr;
 }
 
-function extractPhrase(text: string): string | null {
-  const words = text.replace(/[“”"']/g, "").split(/\s+/).filter(Boolean);
-  if (words.length < 8) return null;
-  const start = Math.floor(words.length * 0.25);
-  const phrase = words.slice(start, start + 6).join(" ");
-  return phrase.length >= 20 ? phrase : null;
+function simplify(text: string): string {
+  return text.replace(/\s+/g, " ").replace(/[“”"']/g, "").trim();
 }
 
-function extractNumbers(text: string): string[] {
-  return text.match(/\b\d+(?:\.\d+)?\b/g) ?? [];
+function cleanSpeaker(raw: string): string {
+  return raw.replace(/^(And|Then|Now|So|But|When|After|Before)\s+/i, "").trim();
 }
 
-function extractProperNames(text: string): string[] {
+/** Short, complete phrase for quiz options — no mid-sentence cuts or ellipsis. */
+export function readablePhrase(text: string, maxWords = 12): string {
+  let s = simplify(text);
+  s = s.replace(/^(And|Then|Now|So|But)\s+/i, "");
+
+  const firstSentence = s.split(/[.!?;]/)[0]?.trim() || s;
+  const clause = firstSentence.split(/,\s+/)[0]?.trim() || firstSentence;
+  const words = clause.split(/\s+/).filter(Boolean);
+
+  if (words.length <= maxWords) return clause;
+
+  return words.slice(0, maxWords).join(" ");
+}
+
+function normalizeOption(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function extractNames(text: string): string[] {
   const matches = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b/g) ?? [];
-  return [...new Set(matches.filter((n) => !["The", "And", "But", "For", "Then", "Now", "So", "He", "She", "They", "God", "Lord"].includes(n)))];
+  return [...new Set(matches.filter((n) => !STOP_WORDS.has(n)))];
 }
 
-function pickIndices(count: number, total: number, rand: () => number): number[] {
-  const indices = Array.from({ length: total }, (_, i) => i);
-  return shuffleWithSeed(indices, rand).slice(0, count);
+function extractSaidQuote(text: string): { speaker: string; quote: string } | null {
+  const saidMatch = text.match(/^(.+?)\s+said,\s+["'](.+?)["']/i);
+  if (saidMatch) {
+    return { speaker: cleanSpeaker(saidMatch[1]), quote: saidMatch[2] };
+  }
+  const colonMatch = text.match(/^(.+?)\s+said:\s+["']?(.+?)["']?\.?$/i);
+  if (colonMatch) {
+    return { speaker: cleanSpeaker(colonMatch[1]), quote: colonMatch[2] };
+  }
+  return null;
+}
+
+function extractCreatedObject(text: string): string | null {
+  const m = text.match(/created(?:\s+the|\s+)?(.+?)(?:\.|,|$)/i);
+  if (m) return readablePhrase(m[1].trim(), 8);
+  return null;
+}
+
+function extractCalledName(text: string): { subject: string; name: string } | null {
+  const m = text.match(/called(?:\s+the|\s+)?(.+?)\s+["']([^"']+)["']/i);
+  if (m) return { subject: readablePhrase(m[1].trim(), 4), name: m[2] };
+  const m2 = text.match(/called\s+["']([^"']+)["']/i);
+  if (m2) return { subject: "it", name: m2[1] };
+  return null;
+}
+
+function buildOptions(
+  correct: string,
+  wrongPool: string[],
+  rand: () => number,
+  count = 4
+): { options: string[]; correctIndex: number } | null {
+  const correctNorm = normalizeOption(correct);
+  const seen = new Set<string>([correctNorm]);
+
+  const uniqueWrong: string[] = [];
+  for (const raw of wrongPool) {
+    const opt = readablePhrase(raw, 12);
+    const norm = normalizeOption(opt);
+    if (opt.length < 4 || norm === correctNorm || seen.has(norm)) continue;
+    if (correctNorm.includes(norm) || norm.includes(correctNorm)) continue;
+    seen.add(norm);
+    uniqueWrong.push(opt);
+  }
+
+  const extras = shuffleWithSeed(GENERIC_DISTRACTORS, rand).filter((d) => {
+    const norm = normalizeOption(d);
+    return !seen.has(norm) && norm !== correctNorm;
+  });
+
+  for (const e of extras) {
+    if (uniqueWrong.length >= count - 1) break;
+    const norm = normalizeOption(e);
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      uniqueWrong.push(e);
+    }
+  }
+
+  if (uniqueWrong.length < 3) return null;
+
+  const options = shuffleWithSeed([correct, ...uniqueWrong.slice(0, 3)], rand).map((o) =>
+    readablePhrase(o, 10)
+  );
+  const correctNormAfter = normalizeOption(readablePhrase(correct, 10));
+  const correctIndex = options.findIndex((o) => normalizeOption(o) === correctNormAfter);
+  if (correctIndex < 0) return null;
+
+  return { options, correctIndex };
+}
+
+interface QuestionDraft {
+  question: string;
+  correct: string;
+  wrongPool: string[];
+  explanation: string;
+  reviewVerse: string;
+  priority: number;
 }
 
 export function generateQuizFromVerses(
@@ -74,195 +189,231 @@ export function generateQuizFromVerses(
 ): ChapterQuiz {
   const seed = `${bookId}:${chapter}`;
   const rand = seededRandom(seed);
-  const questions: QuizQuestion[] = [];
-  let qId = 1;
+  const drafts: QuestionDraft[] = [];
 
   if (verses.length === 0) {
     return { bookId, bookName, chapter, questions: [] };
   }
 
-  // Q1–Q2: Which verse contains this phrase?
-  const phraseCandidates = verses
-    .map((v, i) => ({ v, i, phrase: extractPhrase(v.text) }))
-    .filter((x) => x.phrase);
+  const allPhrases = verses.map((v) => readablePhrase(v.text));
+  const isShortChapter = verses.length <= 4;
 
-  for (const { v, phrase } of pickIndices(Math.min(2, phraseCandidates.length), phraseCandidates.length, rand).map(
-    (i) => phraseCandidates[i]
-  )) {
-    const wrongVerses = verses
-      .filter((wv) => wv.verse !== v.verse)
-      .sort(() => rand() - 0.5)
-      .slice(0, 3)
-      .map((wv) => `Verse ${wv.verse}`);
-
-    const options = shuffleWithSeed(
-      [`Verse ${v.verse}`, ...wrongVerses],
-      rand
-    );
-    questions.push({
-      id: qId++,
-      question: `Which verse contains the phrase "...${phrase}..."?`,
-      options,
-      correctIndex: options.indexOf(`Verse ${v.verse}`),
-      explanation: `Verse ${v.verse} reads: "${v.text}"`,
-      reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+  if (!isShortChapter) {
+    const opening = verses[0];
+    drafts.push({
+      question: "What happens at the beginning of this chapter?",
+      correct: readablePhrase(opening.text),
+      wrongPool: [...allPhrases.slice(1), ...GENERIC_DISTRACTORS],
+      explanation: `The chapter opens: "${opening.text}"`,
+      reviewVerse: `${bookName} ${chapter}:${opening.verse}`,
+      priority: 10,
     });
   }
 
-  // Q3: Number questions from actual verse text
-  const numberVerses = verses.filter((v) => extractNumbers(v.text).length > 0);
-  if (numberVerses.length > 0) {
-    const v = numberVerses[Math.floor(rand() * numberVerses.length)];
-    const nums = extractNumbers(v.text);
-    const target = nums[Math.floor(rand() * nums.length)];
-    const wrongNums = shuffleWithSeed(
-      ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Ten", "Twelve", "Forty", "Seventy"]
-        .filter((n) => n.toLowerCase() !== target.toLowerCase() && n !== target)
-        .slice(0, 8),
-      rand
-    ).slice(0, 3);
-
-    const options = shuffleWithSeed([target, ...wrongNums], rand);
-    questions.push({
-      id: qId++,
-      question: `According to verse ${v.verse}, which number appears in the text?`,
-      options,
-      correctIndex: options.indexOf(target),
-      explanation: `Verse ${v.verse} mentions "${target}": "${v.text}"`,
-      reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+  if (!isShortChapter && verses.length > 2) {
+    const closing = verses[verses.length - 1];
+    drafts.push({
+      question: "How does this chapter end?",
+      correct: readablePhrase(closing.text),
+      wrongPool: allPhrases.filter((_, i) => i !== verses.length - 1),
+      explanation: `The chapter ends: "${closing.text}"`,
+      reviewVerse: `${bookName} ${chapter}:${closing.verse}`,
+      priority: 9,
     });
   }
 
-  // Q4: Who is mentioned?
-  const nameVerses = verses.filter((v) => extractProperNames(v.text).length > 0);
-  if (nameVerses.length > 0) {
-    const v = nameVerses[Math.floor(rand() * nameVerses.length)];
-    const names = extractProperNames(v.text);
-    const correct = names[Math.floor(rand() * names.length)];
-    const allNames = verses.flatMap((vv) => extractProperNames(vv.text));
-    const wrongNames = shuffleWithSeed(
-      [...new Set(allNames.filter((n) => n !== correct))],
-      rand
-    ).slice(0, 3);
-
-    if (wrongNames.length >= 2) {
-      const options = shuffleWithSeed([correct, ...wrongNames.slice(0, 3)], rand);
-      questions.push({
-        id: qId++,
-        question: `Who is mentioned in verse ${v.verse} of ${bookName} chapter ${chapter}?`,
-        options,
-        correctIndex: options.indexOf(correct),
-        explanation: `Verse ${v.verse} mentions ${correct}: "${v.text}"`,
+  for (const v of verses) {
+    const said = extractSaidQuote(v.text);
+    if (said && said.quote.length > 6 && said.speaker.length > 1) {
+      drafts.push({
+        question: `What did ${said.speaker} say?`,
+        correct: readablePhrase(`"${said.quote}"`, 10),
+        wrongPool: verses
+          .filter((vv) => vv.verse !== v.verse)
+          .map((vv) => {
+            const other = extractSaidQuote(vv.text);
+            return other ? `"${other.quote}"` : vv.text;
+          }),
+        explanation: `${said.speaker} said: "${said.quote}" (${bookName} ${chapter}:${v.verse})`,
         reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+        priority: 10,
       });
+      break;
     }
   }
 
-  // Q5: Complete the verse opening
-  const longVerses = verses.filter((v) => v.text.split(/\s+/).length >= 10);
-  if (longVerses.length > 0) {
-    const v = longVerses[Math.floor(rand() * longVerses.length)];
-    const words = v.text.split(/\s+/);
-    const opening = words.slice(0, 5).join(" ");
-    const wrongOpenings = shuffleWithSeed(
-      longVerses.filter((lv) => lv.verse !== v.verse),
-      rand
-    )
-      .slice(0, 3)
-      .map((lv) => lv.text.split(/\s+/).slice(0, 5).join(" "));
-
-    if (wrongOpenings.length >= 2) {
-      const options = shuffleWithSeed([opening, ...wrongOpenings], rand);
-      questions.push({
-        id: qId++,
-        question: `How does verse ${v.verse} begin?`,
-        options,
-        correctIndex: options.indexOf(opening),
-        explanation: `Verse ${v.verse} begins: "${opening}..."`,
+  for (const v of verses) {
+    const created = extractCreatedObject(v.text);
+    if (created && created.length > 3) {
+      drafts.push({
+        question: "What does this chapter say was created?",
+        correct: created,
+        wrongPool: verses
+          .filter((vv) => vv.verse !== v.verse)
+          .map((vv) => extractCreatedObject(vv.text) ?? vv.text)
+          .filter(Boolean) as string[],
+        explanation: `"${v.text}" (${bookName} ${chapter}:${v.verse})`,
         reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+        priority: 9,
       });
+      break;
     }
   }
 
-  // Q6: Chapter content — which statement is true based on the text?
-  const midVerse = verses[Math.floor(verses.length / 2)];
-  const trueStatement = `Verse ${midVerse.verse} says: "${midVerse.text.length > 100 ? midVerse.text.slice(0, 97) + "..." : midVerse.text}"`;
-  const falseStatements = shuffleWithSeed(
-    verses.filter((v) => v.verse !== midVerse.verse),
+  for (const v of verses) {
+    const named = extractCalledName(v.text);
+    if (named) {
+      const subjectLabel = named.subject.length > 2 ? named.subject : "something in this chapter";
+      drafts.push({
+        question: `What name was given to ${subjectLabel}?`,
+        correct: named.name,
+        wrongPool: [
+          ...verses.map((vv) => extractCalledName(vv.text)?.name).filter(Boolean) as string[],
+          "Morning", "Evening", "Wilderness", "Covenant", "Sabbath",
+        ],
+        explanation: `"${v.text}" (${bookName} ${chapter}:${v.verse})`,
+        reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+        priority: 8,
+      });
+      break;
+    }
+  }
+
+  const nameVerses = verses.filter((v) => {
+    const names = extractNames(v.text).filter((n) => COMMON_NAMES.has(n));
+    return names.length > 0 && v.text.split(/\s+/).length >= 8;
+  });
+
+  for (const v of shuffleWithSeed(nameVerses, rand).slice(0, 1)) {
+    const names = extractNames(v.text).filter((n) => COMMON_NAMES.has(n));
+    const subject = names[0];
+    if (!subject) continue;
+    drafts.push({
+      question: `What happens involving ${subject} in this chapter?`,
+      correct: readablePhrase(v.text),
+      wrongPool: allPhrases.filter((s) => !s.toLowerCase().includes(subject.toLowerCase())),
+      explanation: `"${v.text}" (${bookName} ${chapter}:${v.verse})`,
+      reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+      priority: 8,
+    });
+  }
+
+  const storyVerses = verses.filter((v) => v.text.split(/\s+/).length >= 8);
+  const pickVerse = storyVerses[Math.floor(rand() * storyVerses.length)] ?? verses[Math.floor(verses.length / 2)];
+  drafts.push({
+    question: "Which of these events happens in this chapter?",
+    correct: readablePhrase(pickVerse.text),
+    wrongPool: shuffleWithSeed(GENERIC_DISTRACTORS, rand),
+    explanation: `"${pickVerse.text}" (${bookName} ${chapter}:${pickVerse.verse})`,
+    reviewVerse: `${bookName} ${chapter}:${pickVerse.verse}`,
+    priority: 7,
+  });
+
+  const keyMoments = shuffleWithSeed(
+    verses.filter((v) => v.text.split(/\s+/).length >= 6),
     rand
-  )
-    .slice(0, 3)
-    .map(
-      (v) =>
-        `Verse ${v.verse} says: "${v.text.split(/\s+/).slice(0, 8).join(" ")}..." (this is from a different verse)`
-    );
+  );
 
-  if (falseStatements.length >= 2) {
-    const fakeOptions = shuffleWithSeed(verses, rand)
-      .slice(0, 3)
-      .map((v) => {
-        const words = v.text.split(/\s+/);
-        const fake = [...words.slice(0, 3), "[different content]", ...words.slice(-3)].join(" ");
-        return `Verse ${midVerse.verse} says: "${fake}"`;
-      });
-
-    const options = shuffleWithSeed([trueStatement, ...fakeOptions.slice(0, 3)], rand);
-    questions.push({
-      id: qId++,
-      question: `Which statement accurately reflects ${bookName} ${chapter}:${midVerse.verse}?`,
-      options,
-      correctIndex: options.indexOf(trueStatement),
-      explanation: `The correct text of verse ${midVerse.verse} is: "${midVerse.text}"`,
-      reviewVerse: `${bookName} ${chapter}:${midVerse.verse}`,
-    });
-  }
-
-  // Ensure at least 4 questions — fill with verse content questions
-  while (questions.length < 4 && verses.length >= 4) {
-    const usedVerses = new Set(questions.map((q) => q.reviewVerse));
-    const available = verses.filter(
-      (v) => !usedVerses.has(`${bookName} ${chapter}:${v.verse}`)
-    );
-    if (available.length === 0) break;
-
-    const v = available[Math.floor(rand() * available.length)];
-    const wrongVerses = shuffleWithSeed(
-      verses.filter((wv) => wv.verse !== v.verse),
-      rand
-    ).slice(0, 3);
-
-    const options = shuffleWithSeed(
-      [
-        v.text.length > 80 ? v.text.slice(0, 77) + "..." : v.text,
-        ...wrongVerses.map((wv) =>
-          wv.text.length > 80 ? wv.text.slice(0, 77) + "..." : wv.text
-        ),
+  for (const highlight of keyMoments.slice(0, 4)) {
+    drafts.push({
+      question: "Which statement describes something in this chapter?",
+      correct: readablePhrase(highlight.text),
+      wrongPool: [
+        ...keyMoments.filter((v) => v.verse !== highlight.verse).map((v) => v.text),
+        ...GENERIC_DISTRACTORS,
       ],
-      rand
-    );
-
-    questions.push({
-      id: qId++,
-      question: `Which of these is the text of verse ${v.verse}?`,
-      options,
-      correctIndex: 0,
-      explanation: `Verse ${v.verse}: "${v.text}"`,
-      reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+      explanation: `"${highlight.text}" (${bookName} ${chapter}:${highlight.verse})`,
+      reviewVerse: `${bookName} ${chapter}:${highlight.verse}`,
+      priority: 6,
     });
-    // Fix correctIndex after shuffle — recalculate
-    const correctText =
-      v.text.length > 80 ? v.text.slice(0, 77) + "..." : v.text;
-    questions[questions.length - 1].correctIndex = options.indexOf(correctText);
   }
 
-  return {
-    bookId,
-    bookName,
-    chapter,
-    questions: questions
-      .filter((q) => q.correctIndex >= 0 && q.options.length >= 2)
-      .slice(0, 5),
-  };
+  // Genealogy / list chapters: ask about a specific person mentioned
+  const personVerses = verses.filter((v) => {
+    const m = v.text.match(/^(\w+)\s+(?:was|became|lived|begot|had|died)/i);
+    return m && m[1].length > 2;
+  });
+  if (personVerses.length >= 2) {
+    const v = personVerses[Math.floor(rand() * personVerses.length)];
+    const person = v.text.match(/^(\w+)/)?.[1];
+    if (person) {
+      drafts.push({
+        question: `What does this chapter tell us about ${person}?`,
+        correct: readablePhrase(v.text),
+        wrongPool: personVerses.filter((pv) => pv.verse !== v.verse).map((pv) => pv.text),
+        explanation: `"${v.text}" (${bookName} ${chapter}:${v.verse})`,
+        reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+        priority: 7,
+      });
+    }
+  }
+
+  // Short chapters: one question per verse with a distinct line
+  if (isShortChapter) {
+    for (const v of verses) {
+      const phrase = readablePhrase(v.text, 10);
+      if (phrase.length < 6) continue;
+      drafts.push({
+        question: "Which of these lines appears in this chapter?",
+        correct: phrase,
+        wrongPool: [
+          ...verses.filter((vv) => vv.verse !== v.verse).map((vv) => vv.text),
+          ...GENERIC_DISTRACTORS,
+        ],
+        explanation: `"${v.text}" (${bookName} ${chapter}:${v.verse})`,
+        reviewVerse: `${bookName} ${chapter}:${v.verse}`,
+        priority: 10,
+      });
+    }
+
+    drafts.push({
+      question: "Which of these events happens in this chapter?",
+      correct: readablePhrase(verses[0].text),
+      wrongPool: GENERIC_DISTRACTORS,
+      explanation: `"${verses[0].text}" (${bookName} ${chapter}:${verses[0].verse})`,
+      reviewVerse: `${bookName} ${chapter}:${verses[0].verse}`,
+      priority: 8,
+    });
+
+    if (verses.length > 1) {
+      drafts.push({
+        question: "Which statement describes something in this chapter?",
+        correct: readablePhrase(verses[verses.length - 1].text),
+        wrongPool: verses.slice(0, -1).map((v) => v.text),
+        explanation: `"${verses[verses.length - 1].text}" (${bookName} ${chapter}:${verses[verses.length - 1].verse})`,
+        reviewVerse: `${bookName} ${chapter}:${verses[verses.length - 1].verse}`,
+        priority: 7,
+      });
+    }
+  }
+
+  const sorted = drafts.sort((a, b) => b.priority - a.priority);
+  const questions: QuizQuestion[] = [];
+  const usedCorrect = new Set<string>();
+
+  for (const d of sorted) {
+    if (questions.length >= 4) break;
+
+    const correct = readablePhrase(d.correct, 12);
+    const correctKey = normalizeOption(correct);
+    const questionKey = `${d.question.slice(0, 20)}:${correctKey}`;
+    if (usedCorrect.has(questionKey)) continue;
+
+    const built = buildOptions(correct, d.wrongPool, rand);
+    if (!built) continue;
+
+    usedCorrect.add(questionKey);
+    questions.push({
+      id: questions.length + 1,
+      question: d.question,
+      options: built.options,
+      correctIndex: built.correctIndex,
+      explanation: d.explanation,
+      reviewVerse: d.reviewVerse,
+    });
+  }
+
+  return { bookId, bookName, chapter, questions };
 }
 
 export function countWords(verses: BibleVerse[]): number {
@@ -271,7 +422,13 @@ export function countWords(verses: BibleVerse[]): number {
 
 export function minReadTimeMs(verses: BibleVerse[]): number {
   const words = countWords(verses);
-  // ~180 wpm reading speed minimum; floor 20s, cap 8 min
-  const calculated = Math.ceil((words / 180) * 60 * 1000);
-  return Math.max(20000, Math.min(calculated, 480000));
+  if (words < 150) return 5000;
+  if (words < 400) return 10000;
+  if (words < 800) return 18000;
+  if (words < 1500) return 28000;
+  return 40000;
+}
+
+export function scrollThresholdPercent(): number {
+  return 72;
 }

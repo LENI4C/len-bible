@@ -4,12 +4,11 @@ import { useEffect, useState, use, useCallback } from "react";
 import Link from "next/link";
 import { useProgressStore } from "@/store/useProgressStore";
 import { fetchChapter, BibleChapter } from "@/lib/bible-api";
-import { getBook } from "@/lib/books";
+import { getBook, BibleBook } from "@/lib/books";
 import { getNextChapter, getPrevChapter } from "@/lib/chronological-order";
 import { BIBLE_VERSIONS } from "@/lib/bible-versions";
 import { useChapterCompletion } from "@/hooks/useChapterCompletion";
 import { ReadingProgressBar } from "@/components/ReadingProgressBar";
-import { AppLoading } from "@/components/AppLoading";
 import {
   ChevronLeft,
   ChevronRight,
@@ -30,27 +29,69 @@ export default function ReadPage({
   const bookId = book.toUpperCase();
   const chapter = parseInt(chapterStr, 10);
   const bookData = getBook(bookId);
+  const { version } = useProgressStore();
 
-  const { version, setVersion, markChapterRead, readChapters, quizResults } =
-    useProgressStore();
+  if (!bookData) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <p className="text-muted">Book not found.</p>
+        <Link href="/journey" className="mt-4 text-primary hover:underline">
+          Back to Journey
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <ReadChapter
+      key={`${version}-${bookId}-${chapter}`}
+      bookId={bookId}
+      chapter={chapter}
+      bookData={bookData}
+      version={version}
+    />
+  );
+}
+
+function ReadChapter({
+  bookId,
+  chapter,
+  bookData,
+  version,
+}: {
+  bookId: string;
+  chapter: number;
+  bookData: BibleBook;
+  version: string;
+}) {
+  const { setVersion, markChapterRead, readChapters, quizResults } = useProgressStore();
   const [data, setData] = useState<BibleChapter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pointsEarned, setPointsEarned] = useState(0);
   const [showVersionPicker, setShowVersionPicker] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
-  const key = `${bookId}:${chapter}`;
-  const alreadyRead = !!readChapters[key];
-  const quizDone = quizResults[key];
+  const chapterKey = `${bookId}:${chapter}`;
+  const alreadyRead = !!readChapters[chapterKey];
+  const quizDone = quizResults[chapterKey];
 
   useEffect(() => {
-    setLoading(true);
-    setError("");
+    let cancelled = false;
     fetchChapter(version, bookId, chapter)
-      .then(setData)
-      .catch((e) => setError(e.message ?? "Could not load chapter."))
-      .finally(() => setLoading(false));
-  }, [version, bookId, chapter]);
+      .then((chapterData) => {
+        if (!cancelled) setData(chapterData);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message ?? "Could not load chapter.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [version, bookId, chapter, retryCount]);
 
   const handleAutoComplete = useCallback(() => {
     if (alreadyRead) return;
@@ -63,17 +104,6 @@ export default function ReadPage({
     alreadyComplete: alreadyRead,
     onComplete: handleAutoComplete,
   });
-
-  if (!bookData) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-muted">Book not found.</p>
-        <Link href="/journey" className="mt-4 text-primary hover:underline">
-          Back to Journey
-        </Link>
-      </div>
-    );
-  }
 
   const next = getNextChapter(bookId, chapter);
   const prev = getPrevChapter(bookId, chapter);
@@ -142,11 +172,9 @@ export default function ReadPage({
               <p className="text-danger">{error}</p>
               <button
                 onClick={() => {
+                  setError("");
                   setLoading(true);
-                  fetchChapter(version, bookId, chapter)
-                    .then(setData)
-                    .catch((e) => setError(e.message))
-                    .finally(() => setLoading(false));
+                  setRetryCount((c) => c + 1);
                 }}
                 className="mt-3 text-sm text-primary hover:underline"
               >
@@ -165,7 +193,7 @@ export default function ReadPage({
                   <audio controls className="w-full" src={data.audioUrl} />
                 </div>
               )}
-              <div className="prose-bible text-base leading-relaxed">
+              <div className="prose-bible">
                 {data.verses.map((v) => (
                   <p key={v.verse} id={`verse-${v.verse}`}>
                     <sup className="verse-num">{v.verse}</sup>
@@ -182,14 +210,14 @@ export default function ReadPage({
             <div className="rounded-xl bg-success/10 p-4 text-center">
               <CheckCircle2 className="mx-auto mb-1 h-6 w-6 text-success" />
               <p className="font-medium text-success">
-                Chapter completed!{pointsEarned > 0 && ` +${pointsEarned} points`}
+                Well read!{pointsEarned > 0 && ` +${pointsEarned} points`} — now see what you understood.
               </p>
             </div>
           )}
 
           {!alreadyRead && !completion.isComplete && data && (
             <div className="rounded-xl border border-border bg-card p-4 text-center text-sm text-muted">
-              Scroll to the end and read for the required time to auto-complete this chapter.
+              Read through the chapter at your own pace — scroll to the end to continue.
             </div>
           )}
 
@@ -199,7 +227,7 @@ export default function ReadPage({
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-white hover:bg-accent-light"
             >
               <Brain className="h-5 w-5" />
-              Take Chapter Quiz (+25 pts)
+              Check Your Understanding (+25 pts)
             </Link>
           )}
 
