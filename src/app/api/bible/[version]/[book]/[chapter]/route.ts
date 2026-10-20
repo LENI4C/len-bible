@@ -18,7 +18,12 @@ export async function GET(
 
   try {
     const chapter = await fetchBibleChapter(version.toUpperCase(), bookData.id, chapterNum);
-    return NextResponse.json(chapter);
+    return NextResponse.json(chapter, {
+      headers: {
+        // Immutable scripture text — cache at CDN/browser for 30 days
+        "Cache-Control": "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=86400",
+      },
+    });
   } catch (err) {
     console.error("Bible fetch error:", err);
     return NextResponse.json({ error: "Failed to fetch chapter" }, { status: 500 });

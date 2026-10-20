@@ -19,7 +19,7 @@ export interface ChapterQuiz {
   questions: QuizQuestion[];
 }
 
-export const PASS_THRESHOLD = 0.7;
+export { PASS_THRESHOLD } from "@/lib/points";
 
 const STOP_WORDS = new Set([
   "The", "And", "But", "For", "Then", "Now", "So", "He", "She", "They", "It",

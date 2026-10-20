@@ -1,0 +1,134 @@
+{
+  "generated_at": "2026-08-29",
+  "note": "Sample output for review before full batch. Run `npm run quizzes:sample` with ANTHROPIC_API_KEY set to regenerate and insert into Supabase.",
+  "chapters": {
+    "GEN:1": {
+      "questions": [
+        {
+          "question": "What did God create on the first day according to this chapter?",
+          "options": ["Light and darkness separated as day and night", "Land and seas with vegetation", "Sun, moon, and stars", "Fish and birds"],
+          "correct_index": 0,
+          "explanation": "God said 'Let there be light,' separated light from darkness, and called them day and night (vv. 3-5).",
+          "review_verse": "Genesis 1:3"
+        },
+        {
+          "question": "How does the chapter describe the earth before God acts?",
+          "options": ["Formless and empty, with darkness over the deep", "Fully cultivated with rivers and gardens", "Populated by animals and early humans", "Covered entirely by water with no land"],
+          "correct_index": 0,
+          "explanation": "Verse 2 describes the earth as formless and empty, with darkness over the surface of the deep.",
+          "review_verse": "Genesis 1:2"
+        },
+        {
+          "question": "What repeated phrase shows God's evaluation of his creative work?",
+          "options": ["'And it was good'", "'Blessed be the Lord'", "'Fear the Lord'", "'In the beginning'"],
+          "correct_index": 0,
+          "explanation": "After several creative acts, God sees that what he made is good (e.g., vv. 4, 10, 12).",
+          "review_verse": "Genesis 1:10"
+        },
+        {
+          "question": "What special status does humanity receive in this chapter?",
+          "options": ["Made in God's image to rule over creation", "Given dominion only over plants", "Tasked with naming every star", "Forbidden from eating any fruit"],
+          "correct_index": 0,
+          "explanation": "God creates humankind in his image and gives them dominion over fish, birds, livestock, and the earth (vv. 26-28).",
+          "review_verse": "Genesis 1:27"
+        }
+      ]
+    },
+    "GEN:2": {
+      "questions": [
+        {
+          "question": "Why does God rest on the seventh day in this chapter?",
+          "options": ["Because he finished the work of creation", "Because Adam requested a day of worship", "Because the garden needed time to grow", "Because angels completed the heavens"],
+          "correct_index": 0,
+          "explanation": "God rests on the seventh day after finishing the work he had been doing (v. 2).",
+          "review_verse": "Genesis 2:2"
+        },
+        {
+          "question": "What special garden does God plant?",
+          "options": ["Eden, in the east", "Zion, on a mountain", "Canaan, by the sea", "Babel, on a plain"],
+          "correct_index": 0,
+          "explanation": "The Lord God plants a garden in Eden, in the east (v. 8).",
+          "review_verse": "Genesis 2:8"
+        },
+        {
+          "question": "What command does God give the man regarding the trees?",
+          "options": ["You may eat from any tree except the tree of knowledge of good and evil", "You must not eat from any tree until Eve is created", "You may only eat from the tree of life", "You must fast on every seventh day"],
+          "correct_index": 0,
+          "explanation": "God permits eating from any tree in the garden except the tree of the knowledge of good and evil (v. 17).",
+          "review_verse": "Genesis 2:17"
+        },
+        {
+          "question": "Why does God create woman?",
+          "options": ["Because it is not good for the man to be alone", "Because the serpent asked for a companion", "Because Adam failed to name the animals", "Because the garden was too large to tend"],
+          "correct_index": 0,
+          "explanation": "God says it is not good for the man to be alone and makes a helper suitable for him (vv. 18, 22).",
+          "review_verse": "Genesis 2:18"
+        }
+      ]
+    },
+    "GEN:3": {
+      "questions": [
+        {
+          "question": "Who first speaks to the woman about eating the forbidden fruit?",
+          "options": ["The serpent", "Adam", "An angel with a sword", "God walking in the garden"],
+          "correct_index": 0,
+          "explanation": "The serpent questions whether God really said they must not eat from any tree (v. 1).",
+          "review_verse": "Genesis 3:1"
+        },
+        {
+          "question": "What happens immediately after they eat the fruit?",
+          "options": ["Their eyes are opened and they realize they are naked", "They are struck dead on the spot", "The garden instantly withers", "God destroys the serpent with fire"],
+          "correct_index": 0,
+          "explanation": "Both eat, their eyes are opened, and they know they are naked (v. 7).",
+          "review_verse": "Genesis 3:7"
+        },
+        {
+          "question": "How does Adam respond when God asks if he ate the fruit?",
+          "options": ["He blames the woman God gave him", "He confesses fully without excuse", "He denies eating anything", "He says the serpent forced him"],
+          "correct_index": 0,
+          "explanation": "Adam says, 'The woman you put here with me—she gave me some fruit' (v. 12).",
+          "review_verse": "Genesis 3:12"
+        },
+        {
+          "question": "What consequence does the serpent receive?",
+          "options": ["It is cursed to crawl and enmity is placed between it and the woman's offspring", "It is allowed to speak freely forever", "It becomes guardian of the garden", "It is transformed into a lion"],
+          "correct_index": 0,
+          "explanation": "The serpent is cursed above all livestock; it will crawl on its belly and hostility is declared with the woman's offspring (vv. 14-15).",
+          "review_verse": "Genesis 3:14"
+        }
+      ]
+    },
+    "EXO:14": {
+      "questions": [
+        {
+          "question": "Why do the Israelites panic at the Red Sea?",
+          "options": ["Pharaoh's army is approaching behind them and the sea is ahead", "Moses disappears for forty days", "Their food supplies run out completely", "Aaron builds a golden calf"],
+          "correct_index": 0,
+          "explanation": "They see the Egyptians marching after them and cry out in fear, trapped between the army and the sea (vv. 10-12).",
+          "review_verse": "Exodus 14:10"
+        },
+        {
+          "question": "What does Moses tell the people to do?",
+          "options": ["Stand firm and see the deliverance the Lord will bring", "Charge immediately into the Egyptian chariots", "Return voluntarily to slavery in Egypt", "Hide in the mountains for three days"],
+          "correct_index": 0,
+          "explanation": "Moses says, 'Stand firm and you will see the deliverance the Lord will bring you today' (v. 13).",
+          "review_verse": "Exodus 14:13"
+        },
+        {
+          "question": "How does God divide the sea?",
+          "options": ["A strong east wind blows all night, making a path through the water", "Moses strikes the water with his staff once", "Angels lift the water into the sky permanently", "The sea dries up instantly with no wind"],
+          "correct_index": 0,
+          "explanation": "The Lord drives the sea back with a strong east wind through the night, turning it into dry ground (vv. 21-22).",
+          "review_verse": "Exodus 14:21"
+        },
+        {
+          "question": "What happens to Pharaoh's army?",
+          "options": ["The waters return and cover the chariots and horsemen", "They surrender and join Israel", "They turn back before reaching the sea", "They capture Moses on the far shore"],
+          "correct_index": 0,
+          "explanation": "When the Egyptians follow into the sea, the waters flow back and cover them (vv. 26-28).",
+          "review_verse": "Exodus 14:28"
+        }
+      ]
+    }
+  }
+}

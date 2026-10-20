@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "src/app/globals.css"
+        ],
+        "createdAt": "2026-10-20T16:35:38.151Z",
+        "reason": "Incumbent brand utility; user confirmed refine of purple/gold identity that uses gradient-text"
+      }
+    ]
+  }
+}

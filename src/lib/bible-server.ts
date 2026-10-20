@@ -20,6 +20,21 @@ interface HelloAoChapter {
   thisChapterAudioLinks?: { reader: string; url: string }[];
 }
 
+interface ApiBibleVerse {
+  data?: {
+    content?: string;
+    id?: string;
+    orgId?: string;
+  };
+}
+
+interface ApiBibleChapter {
+  data?: {
+    content?: string;
+    reference?: string;
+  };
+}
+
 export interface FetchedVerse {
   verse: number;
   text: string;
@@ -31,9 +46,14 @@ export interface FetchedChapter {
   chapter: number;
   version: string;
   sourceTranslation: string;
+  textSource: "api.bible" | "helloao.org";
   verses: FetchedVerse[];
   audioUrl?: string | null;
 }
+
+const API_BIBLE_BASE = "https://api.scripture.api.bible/v1";
+/** Bible text is immutable — cache aggressively (Next fetch / CDN). */
+const IMMUTABLE_FETCH = { next: { revalidate: 60 * 60 * 24 * 30 } } as const;
 
 function flattenContent(parts: ContentPart[]): string {
   return parts
@@ -62,16 +82,120 @@ function parseHelloAoVerses(data: HelloAoChapter): FetchedVerse[] {
   return verses;
 }
 
-function parseApiBibleContent(content: string): FetchedVerse[] {
-  const lines = content.split("\n").filter(Boolean);
+function stripApiBibleMarkup(content: string): string {
+  return content
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Parse chapter HTML/text that includes verse number spans from API.Bible. */
+function parseApiBibleChapterContent(content: string): FetchedVerse[] {
   const verses: FetchedVerse[] = [];
-  for (const line of lines) {
-    const match = line.match(/^\[?(\d+)\]?\s*(.+)/);
-    if (match) {
-      verses.push({ verse: parseInt(match[1], 10), text: match[2].trim() });
-    }
+  // Prefer span.v markers when present
+  const spanRe = /<span[^>]*data-number="(\d+)"[^>]*>([\s\S]*?)(?=<span[^>]*data-number=|<\/p>|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = spanRe.exec(content)) !== null) {
+    const verse = parseInt(match[1], 10);
+    const text = stripApiBibleMarkup(match[2]);
+    if (text) verses.push({ verse, text });
   }
-  return verses;
+  if (verses.length > 0) return verses.sort((a, b) => a.verse - b.verse);
+
+  // Fallback: split on leading verse numbers in plain text
+  const plain = stripApiBibleMarkup(content);
+  const parts = plain.split(/(?=\b\d+\s)/);
+  for (const part of parts) {
+    const m = part.match(/^(\d+)\s+(.+)/);
+    if (!m) continue;
+    verses.push({ verse: parseInt(m[1], 10), text: m[2].trim() });
+  }
+  return verses.sort((a, b) => a.verse - b.verse);
+}
+
+async function resolveApiBibleId(
+  configuredId: string | undefined,
+  abbreviation: string,
+  apiKey: string
+): Promise<string | null> {
+  if (configuredId) return configuredId;
+
+  const url = `${API_BIBLE_BASE}/bibles?language=eng&abbreviation=${encodeURIComponent(abbreviation)}`;
+  const res = await fetch(url, {
+    headers: { "api-key": apiKey },
+    ...IMMUTABLE_FETCH,
+  });
+  if (!res.ok) return null;
+
+  const body = (await res.json()) as { data?: { id: string }[] };
+  return body.data?.[0]?.id ?? null;
+}
+
+async function fetchApiBibleVerses(
+  bibleId: string,
+  chapterId: string,
+  apiKey: string
+): Promise<FetchedVerse[]> {
+  // Single chapter request (avoids N+1 per-verse fetches)
+  const chapterUrl = `${API_BIBLE_BASE}/bibles/${bibleId}/chapters/${chapterId}?content-type=html&include-notes=false&include-titles=false&include-chapter-numbers=false&include-verse-numbers=true`;
+  const chapterRes = await fetch(chapterUrl, {
+    headers: { "api-key": apiKey },
+    ...IMMUTABLE_FETCH,
+  });
+  if (chapterRes.ok) {
+    const body = (await chapterRes.json()) as ApiBibleChapter;
+    const content = body.data?.content ?? "";
+    const parsed = parseApiBibleChapterContent(content);
+    if (parsed.length > 0) return parsed;
+  }
+
+  // Fallback: verse list + batched parallel fetches (still better than serial)
+  const listUrl = `${API_BIBLE_BASE}/bibles/${bibleId}/chapters/${chapterId}/verses`;
+  const listRes = await fetch(listUrl, {
+    headers: { "api-key": apiKey },
+    ...IMMUTABLE_FETCH,
+  });
+  if (!listRes.ok) {
+    throw new Error(`API.Bible verses list failed (${listRes.status})`);
+  }
+
+  const listBody = (await listRes.json()) as { data?: { id: string }[] };
+  const refs = listBody.data ?? [];
+  if (refs.length === 0) return [];
+
+  const results = await Promise.all(
+    refs.map(async (ref) => {
+      const verseUrl = `${API_BIBLE_BASE}/bibles/${bibleId}/verses/${ref.id}?content-type=text&include-verse-numbers=false&include-titles=false&include-notes=false`;
+      const verseRes = await fetch(verseUrl, {
+        headers: { "api-key": apiKey },
+        ...IMMUTABLE_FETCH,
+      });
+      if (!verseRes.ok) return null;
+      const verseBody = (await verseRes.json()) as ApiBibleVerse;
+      const text = stripApiBibleMarkup(verseBody.data?.content ?? "");
+      const tail = ref.id.split(".").pop() ?? "";
+      const numMatch = tail.match(/^(\d+)/);
+      if (!numMatch || !text) return null;
+      return { verse: parseInt(numMatch[1], 10), text } as FetchedVerse;
+    })
+  );
+
+  return results
+    .filter((v): v is FetchedVerse => v != null)
+    .sort((a, b) => a.verse - b.verse);
+}
+
+async function fetchApiBibleChapterMeta(
+  bibleId: string,
+  apiKey: string
+): Promise<string | null> {
+  const res = await fetch(`${API_BIBLE_BASE}/bibles/${bibleId}`, {
+    headers: { "api-key": apiKey },
+    ...IMMUTABLE_FETCH,
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { data?: { name?: string } };
+  return body.data?.name ?? null;
 }
 
 export async function fetchBibleChapter(
@@ -89,36 +213,41 @@ export async function fetchBibleChapter(
   const helloaoId = versionData.helloaoId ?? "BSB";
   const apiKey = process.env.API_BIBLE_KEY;
 
-  if (apiKey && versionData.apiBibleId) {
+  if (apiKey) {
     try {
-      const url = `https://api.scripture.api.bible/v1/bibles/${versionData.apiBibleId}/chapters/${bookId}.${chapterNum}?content-type=text&include-notes=false&include-titles=false&include-chapter-numbers=false&include-verse-numbers=true`;
-      const res = await fetch(url, {
-        headers: { "api-key": apiKey },
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const content: string = data.data?.content ?? "";
-        const verses = parseApiBibleContent(content);
+      const bibleId = await resolveApiBibleId(
+        versionData.apiBibleId,
+        versionData.abbreviation,
+        apiKey
+      );
+
+      if (bibleId) {
+        const chapterId = `${bookId}.${chapterNum}`;
+        const verses = await fetchApiBibleVerses(bibleId, chapterId, apiKey);
         if (verses.length > 0) {
+          const translationName =
+            (await fetchApiBibleChapterMeta(bibleId, apiKey)) ?? versionData.name;
           return {
             bookId: bookData.id,
             bookName: bookData.name,
             chapter: chapterNum,
             version: versionData.id,
-            sourceTranslation: versionData.name,
+            sourceTranslation: translationName,
+            textSource: "api.bible",
             verses,
           };
         }
       }
-    } catch {
-      // fall through
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("API.Bible fetch failed, using helloao fallback:", err);
+      }
     }
   }
 
   const apiBookId = getHelloaoBookId(bookData.id);
   const url = `https://bible.helloao.org/api/${helloaoId}/${apiBookId}/${chapterNum}.json`;
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, IMMUTABLE_FETCH);
   if (!res.ok) {
     throw new Error("Chapter not found");
   }
@@ -138,6 +267,7 @@ export async function fetchBibleChapter(
     chapter: chapterNum,
     version: versionData.id,
     sourceTranslation,
+    textSource: "helloao.org",
     verses,
     audioUrl: data.thisChapterAudioLinks?.[0]?.url ?? null,
   };

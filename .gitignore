@@ -23,6 +23,11 @@
 # misc
 .DS_Store
 *.pem
+.bin/
+
+# supabase CLI local state
+supabase/.branches
+supabase/.temp
 
 # debug
 npm-debug.log*

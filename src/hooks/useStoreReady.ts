@@ -1,33 +1,39 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { useProgressStore } from "@/store/useProgressStore";
 
-/** Wait until zustand has rehydrated from localStorage. */
+/** Wait until auth session and Supabase profile/progress are loaded. */
 export function useStoreReady() {
   const [ready, setReady] = useState(false);
+  const loadFromSupabase = useProgressStore((s) => s.loadFromSupabase);
 
   useEffect(() => {
-    const markReady = () => setReady(true);
+    let cancelled = false;
 
-    // Trigger rehydration explicitly (required in some Next.js setups)
-    void useProgressStore.persist.rehydrate();
+    const init = async () => {
+      await loadFromSupabase();
+      if (!cancelled) setReady(true);
+    };
 
-    if (useProgressStore.persist.hasHydrated()) {
-      markReady();
-      return;
-    }
+    void init();
 
-    const unsub = useProgressStore.persist.onFinishHydration(markReady);
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      void loadFromSupabase();
+    });
 
-    // Safety fallback — never leave the user on a blank loading screen
-    const timeout = setTimeout(markReady, 1500);
+    const timeout = setTimeout(() => {
+      if (!cancelled) setReady(true);
+    }, 3000);
 
     return () => {
-      unsub();
+      cancelled = true;
+      subscription.unsubscribe();
       clearTimeout(timeout);
     };
-  }, []);
+  }, [loadFromSupabase]);
 
   return ready;
 }

@@ -31,7 +31,9 @@ export default function JourneyPage() {
     if (index === 0) return true;
     const prev = items[index - 1];
     const prevProgress = getBookProgress(prev.bookId, prev.chapters);
-    return prevProgress.read >= Math.ceil(prev.chapters * 0.5);
+    // Prefer quiz mastery; fall back to read progress if quizzes sparse historically
+    const mastered = Math.max(prevProgress.passed, Math.floor(prevProgress.read * 0.5));
+    return mastered >= Math.ceil(prev.chapters * 0.5);
   };
 
   const handleBookClick = (bookId: string, order: number, unlocked: boolean) => {
@@ -47,8 +49,12 @@ export default function JourneyPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-8">
-        <h1 className="mb-2 text-3xl font-bold">Chronological <span className="gradient-text">Reading Journey</span></h1>
-        <p className="text-muted">66 books ordered by the events they describe</p>
+        <h1 className="mb-2 text-3xl font-bold">
+          Chronological <span className="text-primary">reading journey</span>
+        </h1>
+        <p className="text-muted">
+          66 books ordered by the events they describe. Unlock the next book by passing quizzes on ~50% of the previous book.
+        </p>
       </div>
 
       <div className="space-y-3">
@@ -63,6 +69,7 @@ export default function JourneyPage() {
               key={item.bookId}
               className={`glass-card rounded-xl ${unlocked ? "cursor-pointer hover:bg-card-hover" : "opacity-50"}`}
               onClick={() => handleBookClick(item.bookId, item.order, unlocked)}
+              title={unlocked ? undefined : "Pass quizzes on about half of the previous book to unlock"}
             >
               <div className="flex items-center gap-4 p-4">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${complete ? "bg-success/20 text-success" : unlocked ? "bg-primary/20 text-primary" : "bg-border text-muted"}`}>

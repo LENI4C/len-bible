@@ -4,27 +4,39 @@
 
 # Len Bible 📜
 
-> A gamified chronological Bible reading app — read, understand, and track your journey through Scripture.
+> A gamified chronological Bible reading app — read, understand, discuss, and track your journey through Scripture.
 
 ![Len Bible dashboard — streaks, progress, and continue reading](./public/screenshots/dashboard.png)
 
 ## Features
 
 - **Chronological reading** — 66 books in event order (Genesis → Revelation)
-- **Real Bible text** — fetched live from [helloao.org](https://bible.helloao.org/)
-- **Comprehension quizzes** — generated from actual chapter text (not trivia or memorization)
-- **Auto chapter completion** — scroll through + brief reflection time
-- **6 Bible versions** — each mapped to a real open translation
-- **Book overviews** — NIV-style summaries before every book
-- **Streaks, points, levels, leaderboard** — progress tracked locally
+- **Real Bible text** — [API.Bible](https://scripture.api.bible/) when licensed, [helloao.org](https://bible.helloao.org/) fallback
+- **Comprehension quizzes** — stored in Supabase, graded server-side (answers never exposed to the client)
+- **Chapter discussion** — threads and replies per chapter, with verse-level links
+- **Auth & sync** — magic-link sign-in, username, progress synced via Supabase
+- **Streaks, points, levels, leaderboard** — realtime global leaderboard
+- **6 Bible versions** — NIV, NLT, ERV, CJB, AMP, CEB (licensed via API.Bible when key is set)
+
+## Where things appear in the app
+
+| Feature | Route | How to get there |
+|---------|-------|------------------|
+| **Read chapter** | `/read/[book]/[chapter]` | Journey → pick a book/chapter |
+| **Quiz** | `/quiz/[book]/[chapter]` | After finishing a chapter → **Check Your Understanding** |
+| **Discuss** | `/discuss/[book]/[chapter]` | **Discuss this chapter** on any read page, or click a verse number |
+| **Thread** | `/discuss/.../thread/[id]` | Open a thread from the discuss list |
+
+> **Quizzes:** Sample seed covers Genesis 1–3 and Exodus 14. On first visit, missing chapters auto-generate via the deterministic generator (`ensureQuizQuestions`). For a full pre-seed: `npm run quizzes:seed-all` (or `quizzes:generate` with an Anthropic key for higher quality).
 
 ## Tech stack
 
 | Layer | Technology |
 |-------|------------|
 | Framework | [Next.js 16](https://nextjs.org/) (App Router) |
+| Backend | [Supabase](https://supabase.com/) (auth, Postgres, Realtime) |
 | UI | [React 19](https://react.dev/), [Tailwind CSS 4](https://tailwindcss.com/) |
-| State | [Zustand](https://zustand.docs.pmnd.dev/) (localStorage persistence) |
+| State | [Zustand](https://zustand.docs.pmnd.dev/) + Supabase sync |
 | Animation | [Framer Motion](https://www.framer.com/motion/) |
 | Language | TypeScript |
 
@@ -34,6 +46,7 @@
 
 - Node.js 20+
 - npm 10+
+- A [Supabase](https://supabase.com/) project (free tier works)
 
 ### Install
 
@@ -41,98 +54,96 @@
 git clone https://github.com/LENI4C/len-bible.git
 cd len-bible
 npm install
-```
-
-### Environment setup
-
-```bash
 cp .env.example .env.local
 ```
 
+### Supabase setup
+
+See [supabase/README.md](supabase/README.md) for full steps. Short version:
+
+1. Create a Supabase project and copy URL + anon key + service role key into `.env.local`
+2. Run migrations: `npm run db:migrate` (needs `DATABASE_URL` or `SUPABASE_DB_PASSWORD`)
+3. Seed sample quizzes: `npm run db:seed`
+4. Enable **Email** auth and add redirect URLs: `http://localhost:3000/auth/callback` (+ your production URL)
+
+### Environment variables
+
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `API_BIBLE_KEY` | No | [API.Bible](https://scripture.api.bible/signup) key for licensed translations (NIV, NLT, etc.) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only — quiz fetch, scripts (never expose to browser) |
+| `API_BIBLE_KEY` | No | [API.Bible](https://scripture.api.bible/signup) key for NIV, NLT, etc. |
+| `ANTHROPIC_API_KEY` | No | For `npm run quizzes:generate` only |
+| `DATABASE_URL` / `SUPABASE_DB_PASSWORD` | Migrations only | Local `npm run db:migrate` |
 
-Without a key, the app uses free open-source translations and shows which source is being served.
+Run `npm run bible:ids` with `API_BIBLE_KEY` set to list translation IDs licensed on your account.
 
-### Run
+### Run locally
 
 ```bash
 npm run dev          # starts dev server (auto-clears stale lock)
 npm run dev:clean    # clears .next cache + starts dev server
 ```
 
-Open **http://localhost:3000** — you should see the onboarding screen.
+Open **http://localhost:3000** — sign in with a magic link, pick a username, then start reading.
 
-### Troubleshooting
+### Deploy to Vercel
 
-If the page is blank or the dev server won't start:
+1. Push to `main` (or connect the repo in Vercel)
+2. Add all env vars from the table above in Vercel → Settings → Environment Variables
+3. Add production auth redirect: `https://your-domain.vercel.app/auth/callback`
+4. Re-run migrations + seed on your Supabase project if not done yet
 
-```bash
-pkill -f "next dev"    # stop orphaned servers
-npm run dev:clean      # clear cache and restart
-```
-
-> **About `.next/dev/lock`:** Next.js creates this file while dev is running to prevent port conflicts. `npm run dev` removes stale locks automatically. The file is gitignored.
-
-### Other scripts
+### Scripts
 
 ```bash
-npm run lint        # ESLint
-npm run typecheck   # TypeScript check
-npm run build       # Production build
-npx tsx scripts/scan-quizzes.ts   # Audit quiz quality across all chapters
+npm run lint              # ESLint
+npm run typecheck         # TypeScript check
+npm run build             # Production build
+npm run db:migrate        # Apply Supabase migrations
+npm run db:seed           # Seed Genesis 1–3 + Exodus 14 quizzes
+npm run quizzes:generate  # Generate full quiz bank (Anthropic key)
+npm run quizzes:audit     # Audit quiz quality
+npm run bible:ids         # List API.Bible IDs for your key
 ```
 
 ## Project structure
 
 ```
 src/
-├── app/                  # Next.js App Router pages and API routes
-│   ├── api/bible/        # GET chapter text by version/book/chapter
-│   ├── api/quiz/         # GET generated quiz for a chapter
-│   ├── read/             # Chapter reader (scroll-based completion)
-│   ├── quiz/             # Understanding check after reading
-│   ├── review/           # Review missed quiz questions
-│   ├── journey/          # All 66 books with progress
-│   ├── leaderboard/      # Local leaderboard
-│   └── profile/          # User stats and version picker
-├── components/           # Shared UI (Navbar, progress bars, onboarding)
-├── hooks/                # React hooks (chapter completion, store hydration)
-├── lib/                  # Core logic
-│   ├── quiz-generator.ts # Quiz generation from chapter verses
-│   ├── bible-server.ts   # Fetches text from helloao.org / API.Bible
-│   ├── bible-versions.ts # Translation source mapping
-│   ├── books.ts          # Book metadata (chapters, IDs)
-│   ├── chronological-order.ts  # 66-book reading order
-│   └── book-summaries.ts # NIV-style book overviews
-└── store/                # Zustand progress store (localStorage)
-scripts/
-├── dev.mjs               # Dev server wrapper (stale lock cleanup)
-└── scan-quizzes.ts       # Full-corpus quiz quality audit
+├── app/
+│   ├── api/bible/        # GET chapter text
+│   ├── api/quiz/         # GET quiz questions (auth required)
+│   ├── auth/callback/    # Magic link callback
+│   ├── discuss/          # Chapter discussion
+│   ├── read/             # Chapter reader
+│   ├── quiz/             # Understanding check
+│   └── ...
+├── components/           # Auth, Navbar, etc.
+├── lib/
+│   ├── bible-server.ts   # API.Bible + helloao fetch
+│   └── supabase/         # Client, server, admin helpers
+├── store/                # Zustand + Supabase sync
+supabase/migrations/      # Schema, RLS, RPC, Realtime
+scripts/                  # Migrations, quiz generation, seeding
 ```
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, branch naming, commit conventions, and how the quiz system works.
-
-All contributors are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE) — Copyright (c) 2026 Leni4c.
+MIT — Copyright (c) 2026 Leni4c. See [LICENSE](LICENSE).
 
 ## Data sources & attribution
 
-Len Bible does **not** ship Bible text. All Scripture is fetched at runtime from third-party APIs:
+Len Bible does **not** ship Bible text. Scripture is fetched at runtime:
 
-| Provider | URL | Role |
-|----------|-----|------|
-| **helloao.org** | [bible.helloao.org](https://bible.helloao.org/) | Default free translations (BSB, NET, ASV, etc.) |
-| **API.Bible** | [scripture.api.bible](https://scripture.api.bible/) | Optional licensed translations when `API_BIBLE_KEY` is set |
+| Provider | Role |
+|----------|------|
+| [API.Bible](https://scripture.api.bible/) | Licensed translations when `API_BIBLE_KEY` is set |
+| [helloao.org](https://bible.helloao.org/) | Free fallback (BSB, NET, ASV, etc.) |
 
-**Important:** Translation text, copyright, and licensing terms belong to the respective providers and copyright holders (e.g. Biblica for NIV, Tyndale for NLT). Len Bible is an independent reading tool and is not affiliated with or endorsed by any Bible publisher or translation provider.
-
-Book overviews in `src/lib/book-summaries.ts` are original summaries written for this app, inspired by NIV-style introductions.
-
-The chronological reading order follows a 66-book event sequence used within this project.
+Translation copyrights belong to their respective holders. Len Bible is not affiliated with any Bible publisher.

@@ -1,0 +1,26 @@
+{
+  "target": "src/app/page.tsx",
+  "also": ["src/app/read", "src/app/quiz"],
+  "date": "2026-10-20",
+  "score": 62,
+  "p0": [
+    "Quiz coverage sparse — loop breaks after most chapters",
+    "Quiz GET leaks explanation/reviewVerse before submit",
+    "Streak can advance without quiz pass"
+  ],
+  "p1": [
+    "Version label honesty on Read",
+    "Missing skip link / aria-current / reduced-motion",
+    "Invalid book returns null on Quiz",
+    "Review does not highlight correct answer",
+    "No level-up or pass celebration",
+    "Bible fetch no-store despite immutable text"
+  ],
+  "strengths": [
+    "Clear chronological continue CTA on home",
+    "Coherent dark purple/gold tokens",
+    "Quiz Framer transitions feel intentional"
+  ],
+  "refineNotRedesign": true,
+  "notes": "Detector clean on scanned TSX. Recommend refine identity; polish reading comfort and loop integrity before any rebrand."
+}

@@ -1,7 +1,7 @@
 {
   "name": "len-bible",
   "version": "0.1.0",
-  "description": "A gamified chronological Bible reading app — read, understand, and track your journey through Scripture.",
+  "description": "A gamified chronological Bible reading app \u2014 read, understand, and track your journey through Scripture.",
   "license": "MIT",
   "author": "Leni4c",
   "repository": {
@@ -19,24 +19,40 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "quizzes:generate": "tsx scripts/generate-quizzes.ts",
+    "quizzes:sample": "tsx scripts/generate-quizzes.ts --sample",
+    "quizzes:seed-all": "tsx scripts/seed-deterministic-quizzes.ts",
+    "quizzes:audit": "tsx scripts/scan-quizzes.ts",
+    "db:migrate": "tsx scripts/apply-migrations.ts",
+    "db:seed": "tsx scripts/seed-sample-quizzes.ts",
+    "bible:ids": "tsx scripts/list-api-bible-ids.ts",
+    "smoke": "node scripts/smoke-loop.mjs",
+    "db:push": "bash scripts/supabase-cli-push.sh"
   },
   "dependencies": {
-    "framer-motion": "^12.23.12",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "dotenv": "^17.4.2",
+    "framer-motion": "^12.43.0",
     "lucide-react": "^0.542.0",
-    "next": "16.3.3",
+    "next": "16.4.2",
+    "pg": "^8.23.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

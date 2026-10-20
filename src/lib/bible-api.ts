@@ -9,6 +9,7 @@ export interface BibleChapter {
   chapter: number;
   version: string;
   sourceTranslation?: string;
+  textSource?: "api.bible" | "helloao.org";
   verses: BibleVerse[];
   audioUrl?: string | null;
 }
@@ -24,22 +25,19 @@ export interface QuizQuestion {
   id: number;
   question: string;
   options: string[];
-  correctIndex: number;
-  explanation: string;
+  explanation?: string;
   reviewVerse?: string;
+  correctIndex?: number;
 }
 
-export const PASS_THRESHOLD = 0.7;
+export { PASS_THRESHOLD } from "@/lib/points";
 
 export async function fetchChapter(
   versionId: string,
   bookId: string,
   chapter: number
 ): Promise<BibleChapter> {
-  const res = await fetch(
-    `/api/bible/${versionId}/${bookId}/${chapter}`,
-    { cache: "no-store" }
-  );
+  const res = await fetch(`/api/bible/${versionId}/${bookId}/${chapter}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Failed to fetch chapter");

@@ -29,8 +29,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Smoke core artifacts
+        run: node scripts/smoke-loop.mjs
+
       - name: Build
         run: npm run build
         env:
-          # Build does not require a real key; API routes are not called at build time
           API_BIBLE_KEY: ""
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-key
+          NEXT_PUBLIC_SITE_URL: https://lenbible.app
