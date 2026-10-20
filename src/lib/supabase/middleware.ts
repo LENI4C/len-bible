@@ -22,10 +22,15 @@ function isPublicPath(pathname: string): boolean {
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Never throw from the request proxy — a crash becomes MIDDLEWARE_INVOCATION_FAILED on Vercel.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return supabaseResponse;
+  }
+
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -40,22 +45,24 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+    });
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { pathname } = request.nextUrl;
+
+    // Soft gate: API quiz requires auth (route already checks). App pages rely on AppProviders.
+    // Hard-redirect unauthenticated users away from deep app routes when hitting SSR.
+    if (!user && !isPublicPath(pathname) && !pathname.startsWith("/api/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.searchParams.set("auth", "required");
+      return NextResponse.redirect(url);
     }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-
-  // Soft gate: API quiz requires auth (route already checks). App pages rely on AppProviders.
-  // Hard-redirect unauthenticated users away from deep app routes when hitting SSR.
-  if (!user && !isPublicPath(pathname) && !pathname.startsWith("/api/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.searchParams.set("auth", "required");
-    return NextResponse.redirect(url);
+  } catch {
+    return supabaseResponse;
   }
 
   void PUBLIC_PREFIXES;
